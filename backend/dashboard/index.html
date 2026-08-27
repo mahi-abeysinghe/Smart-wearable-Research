@@ -1,0 +1,1449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMART WEAR HEALTH | Clinical Command Center</title>
+    <!-- MQTT WebSocket Client -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <!-- html2pdf.js for Client-Side PDF Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- Chart.js for Graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+    <script>
+        // 🔑 Firebase Configuration & Initialization
+        const firebaseConfig = {
+            databaseURL: "https://smart-wear-health-default-rtdb.firebaseio.com"
+        };
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.database();
+    </script>
+
+    <style>
+        :root {
+            --bg-base: #04070a;
+            --bg-card: #0c1322;
+            --bg-card-hover: #111b30;
+            --border-card: #1d2d44;
+            --accent-cyan: #06b6d4;
+            --accent-blue: #38bdf8;
+            --text-main: #f8fafc;
+            --text-sub: #94a3b8;
+            --danger: #ef4444;
+            --warn: #fbbf24;
+            --success: #22c55e;
+            --orange: #fb923c;
+        }
+
+        .light-mode {
+            --bg-base: #f1f5f9;
+            --bg-card: #ffffff;
+            --bg-card-hover: #e2e8f0;
+            --border-card: #cbd5e1;
+            --accent-cyan: #0891b2;
+            --accent-blue: #0284c7;
+            --text-main: #0f172a;
+            --text-sub: #475569;
+            --danger: #dc2626;
+            --warn: #d97706;
+            --success: #16a34a;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: var(--bg-base); color: var(--text-main); min-height: 100vh; padding-bottom: 50px; transition: background 0.3s, color 0.3s; }
+
+        header {
+            background: var(--bg-card); border-bottom: 1px solid var(--border-card);
+            padding: 14px 28px; display: flex; justify-content: space-between; align-items: center;
+            position: sticky; top: 0; z-index: 100; backdrop-filter: blur(10px); border-radius: 0 0 16px 16px;
+        }
+
+        .brand-box { display: flex; align-items: center; gap: 12px; }
+        .brand-icon {
+            width: 38px; height: 38px; border-radius: 10px;
+            background: linear-gradient(135deg, var(--accent-cyan), #2563eb);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px; font-weight: 900; color: #fff;
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.35);
+        }
+        .brand-title { font-size: 18px; font-weight: 800; }
+        .brand-title span { color: var(--accent-cyan); }
+        .brand-sub { font-size: 10.5px; color: var(--text-sub); margin-top: 1px; }
+
+        .header-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .meta-pill {
+            background: var(--bg-base); border: 1px solid var(--border-card);
+            padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 600;
+            display: flex; align-items: center; gap: 8px; color: var(--text-sub);
+        }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+
+        .sos-btn { cursor: pointer; padding: 6px 16px; border-radius: 20px; font-size: 11px; font-weight: 800; border: 1px solid var(--danger); background: transparent; color: var(--danger); transition: 0.3s; }
+        .sos-btn.off { background: var(--danger); color: white; box-shadow: 0 0 10px rgba(239, 68, 68, 0.5); }
+        
+        .theme-btn { cursor: pointer; background: var(--bg-base); border: 1px solid var(--border-card); color: var(--text-main); padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+
+        #sosAlertBanner {
+            display: none; background: linear-gradient(90deg, #991b1b, #ef4444, #991b1b);
+            color: #fff; padding: 12px; text-align: center; font-weight: 800;
+            letter-spacing: 1px; font-size: 13px; animation: pulse-sos 1s infinite alternate;
+        }
+        @keyframes pulse-sos { from { opacity: 0.85; } to { opacity: 1; } }
+
+        /* Modern Flex-Wrap Navigation Tabs (Without Numbers, Clean Single Alignment) */
+        .nav-tabs {
+            max-width: 1360px; margin: 20px auto; padding: 0 24px;
+            display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+        }
+        .tab-btn {
+            background: var(--bg-card); border: 1px solid var(--border-card); color: var(--text-sub);
+            padding: 10px 18px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+            border-radius: 10px; transition: all 0.2s ease;
+        }
+        .tab-btn:hover { border-color: var(--accent-cyan); color: var(--text-main); }
+        .tab-btn.active { background: var(--accent-cyan); color: #04070a; border-color: var(--accent-cyan); font-weight: 800; box-shadow: 0 0 15px rgba(6, 182, 212, 0.4); }
+
+        .container { max-width: 1360px; margin: 20px auto; padding: 0 24px; }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+        .grid-5 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 18px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 18px; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 18px; }
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+
+        /* Radial Gauge Layout */
+        .gauge-card {
+            background: var(--bg-card); border: 1px solid var(--border-card);
+            border-radius: 16px; padding: 16px 14px 12px 14px; position: relative;
+            display: flex; flex-direction: column; align-items: center; text-align: center;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); transition: transform 0.2s ease;
+        }
+        .gauge-card:hover { transform: translateY(-2px); border-color: var(--accent-cyan); }
+        .card-top {
+            width: 100%; display: flex; justify-content: space-between; align-items: center;
+            font-size: 10.5px; font-weight: 800; color: var(--text-sub); text-transform: uppercase;
+            letter-spacing: 0.5px; margin-bottom: 4px;
+        }
+        .gauge-wrap { position: relative; width: 140px; height: 110px; display: flex; justify-content: center; align-items: center; }
+        .gauge-svg { width: 140px; height: 110px; transform: rotate(-210deg); }
+        .gauge-bg { fill: none; stroke: var(--border-card); stroke-width: 9; stroke-linecap: round; }
+        .gauge-progress {
+            fill: none; stroke-width: 9; stroke-linecap: round;
+            stroke-dasharray: 198; stroke-dashoffset: 198;
+            transition: stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.3s;
+        }
+        .gauge-center-val {
+            position: absolute; top: 38px; left: 0; width: 100%; text-align: center;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .val-num { font-size: 27px; font-weight: 900; color: var(--text-main); line-height: 1; }
+        .val-unit { font-size: 10px; font-weight: 700; color: var(--text-sub); margin-top: 3px; }
+        .gauge-status-sub { font-size: 11px; font-weight: 700; margin-top: 2px; }
+
+        .card {
+            background: var(--bg-card); border: 1px solid var(--border-card);
+            border-radius: 16px; padding: 18px; position: relative; overflow: hidden;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); transition: 0.3s;
+        }
+        
+        .blink-red { animation: blinker 1s linear infinite; border: 3px solid var(--danger) !important; box-shadow: 0 0 25px var(--danger); }
+        @keyframes blinker { 50% { opacity: 0.6; } }
+
+        .card-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 10px; font-size: 11px; font-weight: 700;
+            color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .val-large { font-size: 30px; font-weight: 900; color: var(--text-main); display: flex; align-items: baseline; gap: 6px; }
+        .val-sub { font-size: 11px; margin-top: 6px; font-weight: 600; }
+
+        .graph-box { width: 100%; height: 210px; background: var(--bg-base); border-radius: 12px; border: 1px solid var(--border-card); margin-top: 8px; }
+        canvas { width: 100% !important; height: 100% !important; }
+
+        /* 15+ Diseases Matrix */
+        .matrix-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+        .matrix-card {
+            background: var(--bg-base); border: 1px solid var(--border-card); border-radius: 12px; padding: 14px;
+            cursor: pointer; transition: all 0.2s; position: relative;
+        }
+        .matrix-card:hover { border-color: var(--accent-cyan); background: var(--bg-card-hover); transform: translateY(-2px); }
+        .matrix-card.active { background: rgba(6, 182, 212, 0.1); border-color: var(--accent-cyan); box-shadow: 0 0 20px rgba(6, 182, 212, 0.25); }
+        .matrix-title { font-size: 13px; font-weight: 700; display: flex; justify-content: space-between; color: var(--text-main); }
+        .matrix-desc { font-size: 11px; color: var(--text-sub); margin-top: 4px; }
+        .prob-bar-bg { width: 100%; height: 5px; background: var(--border-card); border-radius: 3px; margin-top: 10px; overflow: hidden; }
+        .prob-bar-fill { height: 100%; background: var(--accent-cyan); width: 0%; transition: width 0.3s ease; }
+        .click-hint { font-size: 9.5px; color: var(--accent-blue); margin-top: 8px; display: block; font-weight: 600; }
+
+        .diag-hero {
+            background: linear-gradient(135deg, #0e1c36, #12284c);
+            border: 1px solid #234375; border-radius: 14px; padding: 20px; margin-bottom: 18px;
+            display: flex; justify-content: space-between; align-items: center; color: #fff;
+        }
+
+        .terminal-box { background: var(--bg-base); border: 1px solid var(--border-card); border-radius: 10px; padding: 14px; font-family: monospace; font-size: 11px; color: #34d399; height: 420px; overflow-y: auto; }
+        .log-row { margin-bottom: 4px; word-break: break-all; }
+
+        /* Modal */
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(4, 7, 15, 0.85); backdrop-filter: blur(8px); z-index: 1000;
+            justify-content: center; align-items: center; padding: 20px;
+        }
+        .modal-card {
+            background: var(--bg-card); border: 1px solid var(--accent-cyan); border-radius: 16px;
+            width: 100%; max-width: 880px; max-height: 90vh; overflow-y: auto; padding: 24px;
+            box-shadow: 0 0 35px rgba(6, 182, 212, 0.25); position: relative; color: var(--text-main);
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .modal-title { font-size: 20px; font-weight: 800; color: var(--text-main); }
+        .modal-close {
+            background: var(--border-card); border: none; color: var(--text-main); width: 32px; height: 32px;
+            border-radius: 50%; font-size: 16px; font-weight: bold; cursor: pointer;
+        }
+        .modal-close:hover { background: var(--danger); color: #fff; }
+        .history-table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 11px; }
+        .history-table th { background: var(--bg-base); padding: 10px; text-align: left; color: var(--text-sub); }
+        .history-table td { padding: 10px; border-bottom: 1px solid var(--border-card); color: var(--text-main); }
+
+        /* Patient Profile Layout */
+        .profile-layout { display: grid; grid-template-columns: 300px 1fr; gap: 20px; }
+        .profile-photo-box {
+            background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 16px;
+            padding: 24px; display: flex; flex-direction: column; align-items: center; text-align: center;
+        }
+        .photo-preview {
+            width: 130px; height: 130px; border-radius: 50%; border: 3px solid var(--accent-cyan);
+            object-fit: cover; background: var(--bg-base); margin-bottom: 16px; box-shadow: 0 0 20px rgba(6, 182, 212, 0.25);
+        }
+        .btn-upload {
+            background: var(--border-card); color: var(--accent-cyan); border: 1px solid var(--accent-cyan);
+            padding: 8px 16px; border-radius: 8px; font-size: 11px; font-weight: bold; cursor: pointer;
+        }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-label { font-size: 11px; font-weight: 700; color: var(--text-sub); text-transform: uppercase; }
+        .form-input {
+            background: var(--bg-base); border: 1px solid var(--border-card); color: var(--text-main);
+            padding: 10px 14px; border-radius: 8px; font-size: 13px; outline: none;
+        }
+        .form-input:focus { border-color: var(--accent-cyan); }
+        .btn-save-profile {
+            background: linear-gradient(135deg, var(--accent-cyan), #2563eb); color: #04070a;
+            border: none; padding: 12px 24px; border-radius: 8px; font-weight: 800;
+            font-size: 13px; cursor: pointer; margin-top: 18px; align-self: flex-start;
+        }
+
+        /* Report Toolbar & Buttons */
+        .report-toolbar {
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--bg-card); border: 1px solid var(--border-card);
+            border-radius: 12px; padding: 14px 20px; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;
+        }
+        .btn-pdf {
+            background: linear-gradient(135deg, var(--accent-cyan), #2563eb);
+            color: #04070a; border: none; padding: 10px 22px; border-radius: 8px;
+            font-size: 13px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 8px;
+        }
+        .btn-csv {
+            background: var(--bg-base); color: var(--accent-blue); border: 1px solid var(--accent-blue); padding: 10px 20px;
+            border-radius: 8px; font-size: 13px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 8px;
+        }
+        .btn-csv:hover { background: var(--accent-blue); color: #fff; }
+
+        .report-paper {
+            background: #ffffff; color: #0f172a; border-radius: 12px;
+            padding: 30px 35px; max-width: 960px; margin: 0 auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .rpt-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 16px; }
+        .rpt-logo { font-size: 20px; font-weight: 900; color: #0f172a; }
+        .rpt-logo span { color: #0284c7; }
+        
+        .rpt-patient-profile {
+            display: flex; gap: 18px; align-items: center; background: #f8fafc;
+            border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; margin-bottom: 16px;
+        }
+        .rpt-avatar { width: 70px; height: 70px; border-radius: 50%; border: 2px solid #0284c7; object-fit: cover; }
+        .rpt-p-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; width: 100%; font-size: 11px; }
+        .rpt-p-label { color: #64748b; font-weight: 700; font-size: 9.5px; text-transform: uppercase; }
+        .rpt-p-val { color: #0f172a; font-weight: 800; font-size: 13px; margin-top: 2px; }
+
+        .rpt-section-title { font-size: 11px; font-weight: 800; color: #0369a1; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; margin: 14px 0 8px 0; }
+        .rpt-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 10px; }
+        .rpt-table th { background: #f1f5f9; padding: 5px 6px; text-align: left; color: #334155; font-weight: 700; border: 1px solid #e2e8f0; }
+        .rpt-table td { padding: 5px 6px; border: 1px solid #e2e8f0; color: #1e293b; }
+
+        .rpt-badge-safe { background: #dcfce7; color: #15803d; padding: 2px 4px; border-radius: 3px; font-weight: 800; font-size: 9px; }
+        .rpt-badge-warn { background: #fef3c7; color: #b45309; padding: 2px 4px; border-radius: 3px; font-weight: 800; font-size: 9px; }
+        .rpt-badge-danger { background: #fee2e2; color: #b91c1c; padding: 2px 4px; border-radius: 3px; font-weight: 800; font-size: 9px; }
+
+        @media (max-width: 1100px) { .grid-5 { grid-template-columns: repeat(3, 1fr); } .profile-layout { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { .grid-5, .grid-3, .matrix-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body id="mainBody">
+
+    <div id="sosAlertBanner">🚨 EMERGENCY SOS ACTIVATED - PATIENT TRIGGERED RAPID JERK ALARM 🚨</div>
+
+    <header>
+        <div class="brand-box">
+            <div class="brand-icon">✚</div>
+            <div>
+                <div class="brand-title">SMART WEAR <span>HEALTH</span></div>
+                <div class="brand-sub">MAX30102, MLX90614, AD8232 & NEO-7M Telemetry Hub</div>
+            </div>
+        </div>
+        <div class="header-meta">
+            <button id="sosBtn" class="sos-btn" onclick="toggleSOSState()">🚨 SOS ACTIVE</button>
+            <button class="theme-btn" onclick="toggleThemeMode()">🌙 / ☀️ Mode</button>
+            <div class="meta-pill" id="beltStatusPill" style="display:none; border-color: var(--success); color: var(--text-main);">
+                <span>🎽 Belt:</span> <strong id="txtBeltStatus" style="color:var(--success);">OK</strong>
+            </div>
+            <div class="meta-pill" id="gyroStatusPill" style="display:none; border-color: var(--warn); color: var(--text-main);">
+                <span>📉 Gyro:</span> <strong id="txtGyroStatus" style="color:var(--warn);">WAITING</strong>
+            </div>
+            <div class="meta-pill" style="cursor:pointer;" onclick="toggleAudioAlarm()">
+                <span id="audioIcon">🔔</span> <span id="audioTxt">Alarm: ON</span>
+            </div>
+            <div class="meta-pill"><div id="statusDot" class="status-dot"></div> <span id="statusTxt">Connecting...</span></div>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs (Flex-Wrap, No Numbers, Clean Alignment) -->
+    <div class="nav-tabs">
+        <button class="tab-btn active" onclick="switchTab('tab1', this)">Overview & Vitals</button>
+        <button class="tab-btn" onclick="switchTab('tab3', this)">Diagnostics</button>
+        <button class="tab-btn" onclick="switchTab('tab8', this)">History Analysis 📅</button>
+        <button class="tab-btn" onclick="switchTab('tab4', this)">Patient Profile 👤</button>
+        <button class="tab-btn" onclick="switchTab('tab6', this)">Clinical Report</button>
+        <button class="tab-btn" onclick="switchTab('tab5', this)">Telemetry Stream</button>
+    </div>
+
+    <div class="container" id="mainDashboardWrapper">
+
+        <!-- TAB 1: OVERVIEW -->
+        <div id="tab1" class="tab-pane active">
+            <div class="grid-5">
+                <div class="gauge-card">
+                    <div class="card-top"><span>Heart Rate</span><span style="color:var(--danger)">● LIVE</span></div>
+                    <div class="gauge-wrap">
+                        <svg class="gauge-svg" viewBox="0 0 100 100">
+                            <circle class="gauge-bg" cx="50" cy="50" r="42" stroke-dasharray="198" stroke-dashoffset="0"></circle>
+                            <circle class="gauge-progress" id="arcHR" cx="50" cy="50" r="42" stroke="var(--danger)"></circle>
+                        </svg>
+                        <div class="gauge-center-val"><span class="val-num" id="valHR">0</span><span class="val-unit">BPM</span></div>
+                    </div>
+                    <div class="gauge-status-sub" id="subHR" style="color:var(--text-sub);">Waiting for MAX30102</div>
+                </div>
+
+                <div class="gauge-card">
+                    <div class="card-top"><span>SpO2 Oxygen</span><span style="color:var(--accent-cyan)">● LIVE</span></div>
+                    <div class="gauge-wrap">
+                        <svg class="gauge-svg" viewBox="0 0 100 100">
+                            <circle class="gauge-bg" cx="50" cy="50" r="42" stroke-dasharray="198" stroke-dashoffset="0"></circle>
+                            <circle class="gauge-progress" id="arcSpO2" cx="50" cy="50" r="42" stroke="var(--accent-cyan)"></circle>
+                        </svg>
+                        <div class="gauge-center-val"><span class="val-num" id="valSpO2">0</span><span class="val-unit">% SAT</span></div>
+                    </div>
+                    <div class="gauge-status-sub" id="subSpO2" style="color:var(--text-sub);">Waiting for MAX30102</div>
+                </div>
+
+                <div class="gauge-card">
+                    <div class="card-top"><span>Stress Pattern</span><span style="color:var(--warn)">● AI</span></div>
+                    <div class="gauge-wrap">
+                        <svg class="gauge-svg" viewBox="0 0 100 100">
+                            <circle class="gauge-bg" cx="50" cy="50" r="42" stroke-dasharray="198" stroke-dashoffset="0"></circle>
+                            <circle class="gauge-progress" id="arcStress" cx="50" cy="50" r="42" stroke="var(--warn)"></circle>
+                        </svg>
+                        <div class="gauge-center-val"><span class="val-num" id="valStress">0</span><span class="val-unit">% INDEX</span></div>
+                    </div>
+                    <div class="gauge-status-sub" id="subStress" style="color:var(--text-sub);">Waiting for HR + temperature</div>
+                </div>
+
+                <div class="gauge-card">
+                    <div class="card-top"><span>Object Temp</span><span style="color:var(--orange)">● MLX90614</span></div>
+                    <div class="gauge-wrap">
+                        <svg class="gauge-svg" viewBox="0 0 100 100">
+                            <circle class="gauge-bg" cx="50" cy="50" r="42" stroke-dasharray="198" stroke-dashoffset="0"></circle>
+                            <circle class="gauge-progress" id="arcTemp" cx="50" cy="50" r="42" stroke="var(--orange)"></circle>
+                        </svg>
+                        <div class="gauge-center-val"><span class="val-num" id="valTemp">0.0</span><span class="val-unit">°C</span></div>
+                    </div>
+                    <div class="gauge-status-sub" id="subTemp" style="color:var(--text-sub);">Waiting for MLX90614</div>
+                </div>
+
+                <div class="gauge-card">
+                    <div class="card-top"><span>Risk Score</span><span style="color:var(--success)">● AI</span></div>
+                    <div class="gauge-wrap">
+                        <svg class="gauge-svg" viewBox="0 0 100 100">
+                            <circle class="gauge-bg" cx="50" cy="50" r="42" stroke-dasharray="198" stroke-dashoffset="0"></circle>
+                            <circle class="gauge-progress" id="arcRisk" cx="50" cy="50" r="42" stroke="var(--success)"></circle>
+                        </svg>
+                        <div class="gauge-center-val"><span class="val-num" id="valRiskScore">0</span><span class="val-unit">/ 100</span></div>
+                    </div>
+                    <div class="gauge-status-sub" id="subRisk" style="color:var(--text-sub);">No data</div>
+                </div>
+
+                <div class="gauge-card">
+                    <div class="card-top"><span>GPS Fix</span><span style="color:var(--accent-blue)">● NEO-7M</span></div>
+                    <div class="gauge-wrap">
+                        <svg class="gauge-svg" viewBox="0 0 100 100">
+                            <circle class="gauge-bg" cx="50" cy="50" r="42" stroke-dasharray="198" stroke-dashoffset="0"></circle>
+                            <circle class="gauge-progress" id="arcGPS" cx="50" cy="50" r="42" stroke="var(--accent-blue)"></circle>
+                        </svg>
+                        <div class="gauge-center-val"><span class="val-num" id="valGPS">0</span><span class="val-unit">FIX</span></div>
+                    </div>
+                    <div class="gauge-status-sub" id="subGPS" style="color:var(--text-sub);">Waiting for NEO-7M</div>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header">Real-time Photoplethysmogram (Pulse Stream)</div>
+                    <div class="graph-box"><canvas id="canvasPulse"></canvas></div>
+                </div>
+                <div class="card">
+                    <div class="card-header">Experimental WESAD HR + Temperature Stress Probability</div>
+                    <div class="graph-box"><canvas id="canvasGSR"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: STRESS & KINEMATICS -->
+        <div id="tab2" class="tab-pane">
+            <div class="grid-3">
+                <div class="card">
+                    <div class="card-header">Autonomic Nervous State</div>
+                    <div class="val-large" style="font-size:20px;" id="valNervous">PARASYMPATHETIC (CALM)</div>
+                    <div class="val-sub" style="color:var(--text-sub);">Electrodermal response baseline</div>
+                </div>
+                <div class="card">
+                    <div class="card-header">Posture / Spine State (Belt Data)</div>
+                    <div class="val-large" style="font-size:20px;" id="valPosture">GOOD POSTURE</div>
+                    <div class="val-sub" style="color:var(--text-sub);">Spine sensor angle aligned</div>
+                </div>
+                <div class="card">
+                    <div class="card-header">Triple-Jerk SOS Engine</div>
+                    <div class="val-large" style="font-size:20px;" id="valSOS">ARMED / READY</div>
+                    <div class="val-sub" style="color:var(--text-sub);">3 rapid jerks trigger alarm</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">3-Axis Acceleration Dynamics (X, Y, Z Vector)</div>
+                <div class="graph-box" style="height:250px;"><canvas id="canvasKinematics"></canvas></div>
+                <div class="grid-3" style="margin-top:14px; margin-bottom:0;">
+                    <div style="background:var(--bg-base); padding:10px; border-radius:8px; text-align:center;">
+                        <span style="font-size:11px; color:var(--text-sub);">X-AXIS (Lateral)</span>
+                        <div id="valAx" style="font-size:18px; font-weight:800; color:var(--accent-cyan); margin-top:2px;">0.00 m/s²</div>
+                    </div>
+                    <div style="background:var(--bg-base); padding:10px; border-radius:8px; text-align:center;">
+                        <span style="font-size:11px; color:var(--text-sub);">Y-AXIS (Coronal)</span>
+                        <div id="valAy" style="font-size:18px; font-weight:800; color:var(--warn); margin-top:2px;">0.00 m/s²</div>
+                    </div>
+                    <div style="background:var(--bg-base); padding:10px; border-radius:8px; text-align:center;">
+                        <span style="font-size:11px; color:var(--text-sub);">Z-AXIS (Vertical)</span>
+                        <div id="valAz" style="font-size:18px; font-weight:800; color:var(--danger); margin-top:2px;">9.81 m/s²</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: DIAGNOSTICS -->
+        <div id="tab3" class="tab-pane">
+            <div class="diag-hero">
+                <div>
+                    <div style="font-size:11px; color:var(--text-sub); font-weight:700;">PRIMARY REAL-TIME CLINICAL DIAGNOSIS</div>
+                    <div id="heroDiagTitle" style="font-size:26px; font-weight:900; color:var(--accent-cyan); margin-top:4px;">NO SENSOR DATA</div>
+                    <div id="heroDiagDesc" style="font-size:12px; color:var(--text-sub); margin-top:4px;">Waiting for MAX30102, MLX90614, AD8232, and NEO-7M telemetry.</div>
+                </div>
+                <div id="heroSeverityBadge" style="padding:8px 18px; border-radius:10px; font-size:12px; font-weight:800; background:rgba(34,197,94,0.2); color:var(--success); border:1px solid rgba(34,197,94,0.4);">
+                    NO DATA
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom:18px;">
+                <div class="card-header">
+                    <span>1. Trained AI Model Diagnostics</span>
+                    <span style="color:var(--accent-cyan); font-weight:700;">💡 CLICK ANY CARD TO INSPECT LIVE PROBABILITY & HISTORY</span>
+                </div>
+                <div style="font-size:11px; color:var(--text-sub); margin-bottom:14px;">AD8232 arrhythmia classification and the experimental WESAD heart-rate/temperature model.</div>
+                <div class="matrix-grid" id="aiMatrixContainer"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span>2. Rule-Based Sensor Diagnostics</span>
+                    <span style="color:var(--warn); font-weight:700;">MAX30102 + MLX90614 THRESHOLD CHECKS</span>
+                </div>
+                <div style="font-size:11px; color:var(--text-sub); margin-bottom:14px;">Transparent alerts calculated directly from heart rate, SpO2, and temperature readings.</div>
+                <div class="matrix-grid" id="ruleMatrixContainer"></div>
+            </div>
+        </div>
+
+        <!-- TAB 4: PATIENT PROFILE -->
+        <div id="tab4" class="tab-pane">
+            <div class="card">
+                <div class="card-header">Patient Health Profile & Personal Records (Editable)</div>
+                <div class="profile-layout">
+                    <div class="profile-photo-box">
+                        <img id="profilePhotoDisplay" class="photo-preview" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300" alt="Patient Avatar">
+                        <input type="file" id="photoInput" accept="image/*" style="display:none;" onchange="handlePhotoUpload(event)">
+                        <button class="btn-upload" onclick="document.getElementById('photoInput').click()">📸 Upload Photo</button>
+                        <p style="font-size:10px; color:var(--text-sub); margin-top:8px;">PNG, JPG up to 5MB</p>
+                    </div>
+
+                    <div style="display:flex; flex-direction:column;">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label">Full Patient Name</label>
+                                <input type="text" id="inpName" class="form-input" value="Dulaj Bhanuka">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Patient ID / Medical Reg</label>
+                                <input type="text" id="inpPatientId" class="form-input" value="PATIENT-WRIST-01">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Age (Years)</label>
+                                <input type="number" id="inpAge" class="form-input" value="23">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Gender</label>
+                                <select id="inpGender" class="form-input">
+                                    <option value="Male" selected>Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Blood Group</label>
+                                <input type="text" id="inpBlood" class="form-input" value="O+ Positive">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Height & Weight</label>
+                                <input type="text" id="inpBody" class="form-input" value="175 cm | 68 kg">
+                            </div>
+                            <div class="form-group" style="grid-column: span 2;">
+                                <label class="form-label">Emergency Contact Phone & Guardian</label>
+                                <input type="text" id="inpEmergency" class="form-input" value="+94 77 123 4567 (Family / Primary Physician)">
+                            </div>
+                        </div>
+                        <button class="btn-save-profile" onclick="savePatientProfile()">💾 Save & Sync Profile to Medical Report</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 5: STREAM -->
+        <div id="tab5" class="tab-pane">
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <div class="card-header" style="margin:0;">Real-Time MQTT Telemetry Stream</div>
+                    <button onclick="clearTerminal()" style="background:var(--border-card); color:var(--text-main); border:none; padding:6px 14px; border-radius:6px; font-size:11px; cursor:pointer;">Clear Log</button>
+                </div>
+                <div class="terminal-box" id="terminalLog"></div>
+            </div>
+        </div>
+
+        <!-- TAB 6: CLINICAL REPORT -->
+        <div id="tab6" class="tab-pane">
+            <div class="report-toolbar">
+                <div>
+                    <strong style="color:var(--text-main); font-size:14px;">Clinical Telemetry & Diagnostic Report</strong>
+                    <p style="font-size:11px; color:var(--text-sub); margin-top:2px;">Sensor-supported AI predictions and transparent threshold alerts</p>
+                </div>
+                <div style="display:flex; gap:10px; flex-wrap: wrap;">
+                    <button class="btn-csv" onclick="exportDataToCSV()">📊 Export CSV Data</button>
+                    <button class="btn-pdf" onclick="downloadPDFReport()">📄 Download PDF Report</button>
+                </div>
+            </div>
+
+            <div class="report-paper" id="printableReportPaper">
+                <div class="rpt-header">
+                    <div>
+                        <div class="rpt-logo">SMART WEAR <span>HEALTH</span></div>
+                        <div style="font-size:11px; color:#64748b; margin-top:2px;">MAX30102, MLX90614, AD8232 and NEO-7M telemetry report</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:13px; font-weight:800; color:#0f172a;">TELEMETRY MEDICAL REPORT</div>
+                        <div style="font-size:10px; color:#64748b;" id="rptDate">Date: 2026-08-15 | Time: 14:50:00</div>
+                    </div>
+                </div>
+
+                <div class="rpt-patient-profile">
+                    <img id="rptPatientPhoto" class="rpt-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300" alt="Patient Avatar">
+                    <div class="rpt-p-grid">
+                        <div>
+                            <div class="rpt-p-label">Patient Name</div>
+                            <div class="rpt-p-val" id="rptName">Dulaj Bhanuka</div>
+                        </div>
+                        <div>
+                            <div class="rpt-p-label">Subject ID / Reg</div>
+                            <div class="rpt-p-val" id="rptPatientId">PATIENT-WRIST-01</div>
+                        </div>
+                        <div>
+                            <div class="rpt-p-label">Age / Gender</div>
+                            <div class="rpt-p-val" id="rptAgeGender">23 Yrs / Male</div>
+                        </div>
+                        <div>
+                            <div class="rpt-p-label">Blood Group</div>
+                            <div class="rpt-p-val" id="rptBlood">O+ Positive</div>
+                        </div>
+                        <div>
+                            <div class="rpt-p-label">Physical Vitals</div>
+                            <div class="rpt-p-val" id="rptBody">175 cm | 68 kg</div>
+                        </div>
+                        <div>
+                            <div class="rpt-p-label">Sensor Telemetry</div>
+                            <div class="rpt-p-val" id="rptBeltState" style="color:#64748b;">WAITING FOR DATA</div>
+                        </div>
+                        <div style="grid-column: span 2;">
+                            <div class="rpt-p-label">Emergency Contact</div>
+                            <div class="rpt-p-val" id="rptEmergency">+94 77 123 4567</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rpt-section-title">1. Multi-Sensor Physiological Baseline Summary</div>
+                <table class="rpt-table">
+                    <thead>
+                        <tr>
+                            <th>BIOMETRIC PARAMETER</th>
+                            <th>LATEST SENSOR READING</th>
+                            <th>CLINICAL THRESHOLD</th>
+                            <th>EVALUATION</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Resting Heart Rate (BPM)</strong></td>
+                            <td id="rptValHR">0 bpm</td>
+                            <td>60 - 100 bpm</td>
+                            <td><span class="rpt-badge-safe" id="rptStatusHR">NO DATA</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Blood Oxygen Saturation (SpO2)</strong></td>
+                            <td id="rptValSpO2">0 %</td>
+                            <td>95 - 100 %</td>
+                            <td><span class="rpt-badge-safe" id="rptStatusSpO2">NO DATA</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Experimental HR + Temperature Stress Pattern</strong></td>
+                            <td id="rptValGSR">0 % AI probability</td>
+                            <td>Model alert threshold 75%</td>
+                            <td><span class="rpt-badge-safe" id="rptStatusStress">NO DATA</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Peripheral Body Temperature</strong></td>
+                            <td id="rptValTemp">0.0 °C</td>
+                            <td>36.1 - 37.2 °C</td>
+                            <td><span class="rpt-badge-safe" id="rptStatusTemp">NO DATA</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="rpt-section-title">2. Clinical Assessment Matrix Evaluation</div>
+                <table class="rpt-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 25%;">DISEASE / CLINICAL CONDITION</th>
+                            <th style="width: 38%;">DIAGNOSTIC CRITERIA & SENSOR THRESHOLDS</th>
+                            <th style="width: 12%;">PROBABILITY</th>
+                            <th style="width: 13%;">RISK SEVERITY</th>
+                            <th style="width: 12%;">EVALUATION</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rptMatrixTableBody"></tbody>
+                </table>
+
+                <div class="rpt-section-title">3. Automated Healthcare & Clinical Recommendations</div>
+                <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px; font-size:10.5px; line-height:1.5; color:#334155;">
+                    • <strong>Cardiovascular & Oxygen:</strong> MAX30102 provides heart rate and SpO2 for threshold checks.<br>
+                    • <strong>ECG Analysis:</strong> AD8232 waveform windows are evaluated by the trained arrhythmia model when enough valid samples arrive.<br>
+                    • <strong>Stress Pattern:</strong> The experimental WESAD model uses only heart rate and MLX90614 temperature.<br>
+                    • <strong>Location:</strong> NEO-7M coordinates are telemetry only and are not used to diagnose disease.
+                </div>
+
+                <div style="margin-top:15px; border-top:1px solid #e2e8f0; padding-top:8px; display:flex; justify-content:space-between; font-size:9px; color:#94a3b8;">
+                    <div>Generated by Smart Wear Health Telemetry System</div>
+                    <div>Digital Verification: SHA256-IOT-MEDICAL-VALID</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 7: GYRO & FALL DETECTION NODE MONITOR -->
+        <div id="tab7" class="tab-pane">
+            <div class="grid-4">
+                <div class="card">
+                    <div class="card-header">Node Connection</div>
+                    <div class="val-large" style="font-size:18px;" id="gyroNodeState">DISCONNECTED</div>
+                    <div class="val-sub" style="color:var(--text-sub);">MPU6050 Standalone Node</div>
+                </div>
+                <div class="card">
+                    <div class="card-header">Fall / Syncope Status</div>
+                    <div class="val-large" style="font-size:18px;" id="gyroFallState">MONITORING</div>
+                    <div class="val-sub" style="color:var(--text-sub);">Z-Axis Impact Analysis</div>
+                </div>
+                <div class="card">
+                    <div class="card-header">Vertical Accel (Z-Axis)</div>
+                    <div class="val-large" id="gyroAzVal">9.81 m/s²</div>
+                    <div class="val-sub" style="color:var(--text-sub);">Gravitational Vector</div>
+                </div>
+                <div class="card">
+                    <div class="card-header">Severity Level</div>
+                    <div class="val-large" id="gyroSevVal">0 (SAFE)</div>
+                    <div class="val-sub" style="color:var(--text-sub);">Nominal Thresholds</div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom:18px;">
+                <div class="card-header">
+                    <span>Real-time Gyroscopic & Acceleration Waveform (Fall & Posture Analysis Engine)</span>
+                    <span style="color:var(--accent-cyan);">● MPU6050 STREAM</span>
+                </div>
+                <div class="graph-box" style="height:260px;"><canvas id="canvasGyroFall"></canvas></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Advanced Fall Detection & Kinematic Diagnostics Log</div>
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>TIMESTAMP</th>
+                            <th>NODE ID</th>
+                            <th>ACCELERATION (X, Y, Z)</th>
+                            <th>GYRO (X, Y, Z)</th>
+                            <th>DIAGNOSTIC STATUS</th>
+                        </tr>
+                    </thead>
+                    <tbody id="gyroHistoryBody">
+                        <tr><td colspan="5" style="text-align:center; color:var(--text-sub);">Waiting for incoming Gyro node data packets...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB 8: HISTORY ANALYSIS & REPORTING WITH CALENDAR -->
+        <div id="tab8" class="tab-pane">
+            <div class="card" style="margin-bottom:20px;">
+                <div class="card-header">Select Date via Calendar to Analyze Historical Telemetry</div>
+                <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                    <input type="date" id="historyDate" class="form-input" style="width:240px; cursor:pointer;">
+                    <button class="btn-save-profile" style="margin-top:0;" onclick="loadHistoryData()">🔍 Load Date Data</button>
+                    <button class="btn-pdf" onclick="downloadHistoryPDF()">📄 Download Selected Report PDF</button>
+                </div>
+            </div>
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header">Historical Vitals Trend (Heart Rate & Stress)</div>
+                    <div class="graph-box"><canvas id="canvasHistory"></canvas></div>
+                </div>
+                <div class="card">
+                    <div class="card-header">Filtered Historical Timeline Log</div>
+                    <div style="height:210px; overflow-y:auto;">
+                        <table class="history-table">
+                            <thead>
+                                <tr><th>TIMESTAMP</th><th>HR (BPM)</th><th>SpO2</th><th>STRESS</th><th>DIAGNOSIS</th></tr>
+                            </thead>
+                            <tbody id="historyTableBody">
+                                <tr><td colspan="5" style="text-align:center; color:var(--text-sub);">Please select a date from calendar and click Load.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Modal Inspector -->
+    <div class="modal-overlay" id="inspectModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div>
+                    <h2 class="modal-title" id="modalTitle">Condition Details</h2>
+                    <p style="font-size:12px; color:var(--text-sub);" id="modalDesc">Detailed telemetry analysis and live trigger history</p>
+                </div>
+                <button class="modal-close" onclick="closeModal()">✕</button>
+            </div>
+            <div class="card" style="margin-bottom:18px;">
+                <div class="card-header">Live Telemetry Risk Probability Waveform (%) <span style="color:var(--accent-cyan);">● LIVE STREAM</span></div>
+                <div class="graph-box" style="height:220px;"><canvas id="canvasModal"></canvas></div>
+            </div>
+            <div class="card">
+                <div class="card-header">Live Trigger History & Clinical Snapshot Logs</div>
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>TIMESTAMP</th>
+                            <th>TRIGGER CONDITION</th>
+                            <th>RECORDED VITALS</th>
+                            <th>SEVERITY</th>
+                            <th>ACTION</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modalHistoryBody">
+                        <tr><td colspan="5" style="text-align:center; color:var(--text-sub);">No live events recorded for this parameter yet.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let sosGlobalEnabled = true;
+        function toggleSOSState() {
+            sosGlobalEnabled = !sosGlobalEnabled;
+            const btn = document.getElementById('sosBtn');
+            const banner = document.getElementById('sosAlertBanner');
+            if (sosGlobalEnabled) {
+                btn.innerText = "🚨 SOS ACTIVE";
+                btn.className = "sos-btn";
+            } else {
+                btn.innerText = "✅ SOS OFF (MUTED)";
+                btn.className = "sos-btn off";
+                banner.style.display = "none";
+                document.getElementById('mainDashboardWrapper').classList.remove('blink-red');
+            }
+        }
+
+        function toggleThemeMode() {
+            document.body.classList.toggle('light-mode');
+        }
+
+        function switchTab(tabId, btn) {
+            document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            btn.classList.add('active');
+            setTimeout(resizeAllCanvases, 50);
+        }
+
+        // Profile Photo & Data Sync Function
+        function handlePhotoUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('profilePhotoDisplay').src = e.target.result;
+                    document.getElementById('rptPatientPhoto').src = e.target.result;
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function savePatientProfile() {
+            const name = document.getElementById('inpName').value;
+            const patientId = document.getElementById('inpPatientId').value;
+            const age = document.getElementById('inpAge').value;
+            const gender = document.getElementById('inpGender').value;
+            const blood = document.getElementById('inpBlood').value;
+            const body = document.getElementById('inpBody').value;
+            const emergency = document.getElementById('inpEmergency').value;
+
+            document.getElementById('rptName').innerText = name;
+            document.getElementById('rptPatientId').innerText = patientId;
+            document.getElementById('rptAgeGender').innerText = `${age} Yrs / ${gender}`;
+            document.getElementById('rptBlood').innerText = blood;
+            document.getElementById('rptBody').innerText = body;
+            document.getElementById('rptEmergency').innerText = emergency;
+
+            alert("✅ Patient Profile Saved & Synced Successfully to Clinical PDF Report!");
+        }
+
+        // Gyro Chart Initialization
+        let gyroChartInstance = null;
+        function initGyroChart() {
+            const ctx = document.getElementById('canvasGyroFall').getContext('2d');
+            gyroChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array(30).fill(''),
+                    datasets: [
+                        { label: 'Z-Axis (Vertical)', data: Array(30).fill(9.81), borderColor: '#ef4444', borderWidth: 2, tension: 0.2 },
+                        { label: 'X-Axis (Lateral)', data: Array(30).fill(0), borderColor: '#06b6d4', borderWidth: 1.5, tension: 0.2 },
+                        { label: 'Y-Axis (Coronal)', data: Array(30).fill(0), borderColor: '#fbbf24', borderWidth: 1.5, tension: 0.2 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { grid: { color: '#1d2d44' }, ticks: { color: '#94a3b8' } },
+                        x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                    },
+                    plugins: { legend: { labels: { color: '#f8fafc', font: { size: 11 } } } }
+                }
+            });
+        }
+        setTimeout(initGyroChart, 200);
+
+        // Modal Chart Initialization
+        let modalChartInstance = null;
+        let modalProbHistory = Array(35).fill(10);
+        function initModalChart() {
+            const cvModal = document.getElementById('canvasModal');
+            if (!cvModal) return;
+            const ctx = cvModal.getContext('2d');
+            modalChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array(35).fill(''),
+                    datasets: [{ label: 'Risk Probability %', data: modalProbHistory, borderColor: '#06b6d4', backgroundColor: 'rgba(6,182,212,0.1)', fill: true, tension: 0.3 }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { min: 0, max: 100, grid: { color: '#1d2d44' }, ticks: { color: '#94a3b8' } },
+                        x: { grid: { display: false }, ticks: { display: false } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+        setTimeout(initModalChart, 300);
+
+        let historyChartInstance = null;
+
+        function loadHistoryData() {
+            const dateVal = document.getElementById('historyDate').value;
+            if (!dateVal) { alert("Please select a target date from the calendar first!"); return; }
+
+            const tbody = document.getElementById('historyTableBody');
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--accent-cyan);">Fetching records from Firebase for ${dateVal}...</td></tr>`;
+
+            db.ref('telemetry/history').once('value', snapshot => {
+                let matchedRecords = [];
+                snapshot.forEach(child => {
+                    const val = child.val();
+                    if ((val.client_timestamp && val.client_timestamp.includes(dateVal)) || 
+                        (val.time && val.time.includes(dateVal)) || 
+                        JSON.stringify(val).includes(dateVal)) {
+                        matchedRecords.push(val);
+                    }
+                });
+
+                if (matchedRecords.length === 0) {
+                    snapshot.forEach(child => { matchedRecords.push(child.val()); });
+                    matchedRecords = matchedRecords.slice(-25);
+                }
+
+                tbody.innerHTML = '';
+                let timestamps = [], hrValues = [], stressValues = [];
+
+                matchedRecords.forEach(rec => {
+                    const tStr = rec.client_timestamp || rec.time || "N/A";
+                    const hr = rec.heart_rate || 72;
+                    const spo2 = rec.spo2 || 98;
+                    const stress = rec.stress_index || rec.stress || 0;
+                    const diag = rec.diagnosis || "NORMAL HEALTH";
+
+                    timestamps.push(tStr); hrValues.push(hr); stressValues.push(stress);
+
+                    tbody.insertAdjacentHTML('afterbegin', `
+                        <tr>
+                            <td>${tStr}</td><td>${hr}</td><td>${spo2}%</td><td>${stress}%</td>
+                            <td><strong style="color:${diag === 'NORMAL HEALTH' ? 'var(--success)' : 'var(--danger)'};">${diag}</strong></td>
+                        </tr>
+                    `);
+                });
+
+                const ctxHist = document.getElementById('canvasHistory').getContext('2d');
+                if (historyChartInstance) historyChartInstance.destroy();
+
+                historyChartInstance = new Chart(ctxHist, {
+                    type: 'line',
+                    data: {
+                        labels: timestamps,
+                        datasets: [
+                            { label: 'Heart Rate (BPM)', data: hrValues, borderColor: '#ef4444', borderWidth: 2, tension: 0.3 },
+                            { label: 'Stress Index (%)', data: stressValues, borderColor: '#fbbf24', borderWidth: 2, tension: 0.3 }
+                        ]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        scales: {
+                            y: { grid: { color: '#1d2d44' }, ticks: { color: '#94a3b8' } },
+                            x: { grid: { display: false }, ticks: { color: '#94a3b8', maxTicksLimit: 6 } }
+                        },
+                        plugins: { legend: { labels: { color: '#f8fafc', font: { size: 11 } } } }
+                    }
+                });
+            });
+        }
+
+        function downloadHistoryPDF() {
+            const dateVal = document.getElementById('historyDate').value || "All_Time";
+            const element = document.getElementById('printableReportPaper');
+            const patientName = document.getElementById('inpName').value.replace(/\s+/g, '_');
+            const opt = {
+                margin: 0.15, filename: `Historical_Report_${patientName}_${dateVal}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, logging: false },
+                jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+            };
+            html2pdf().set(opt).from(element).save();
+        }
+
+        let lastGyroPacketTime = 0;
+        setInterval(() => {
+            const nodeStateEl = document.getElementById('gyroNodeState');
+            const txtGyroStatus = document.getElementById('txtGyroStatus');
+            const gyroStatusPill = document.getElementById('gyroStatusPill');
+
+            if (Date.now() - lastGyroPacketTime > 4000 && lastGyroPacketTime > 0) {
+                nodeStateEl.innerText = "DISCONNECTED";
+                nodeStateEl.style.color = "var(--danger)";
+                txtGyroStatus.innerText = "OFFLINE";
+                txtGyroStatus.style.color = "var(--danger)";
+                gyroStatusPill.style.borderColor = "var(--danger)";
+            }
+        }, 2000);
+
+        let audioContext = null, alarmEnabled = true;
+        function toggleAudioAlarm() {
+            alarmEnabled = !alarmEnabled;
+            document.getElementById('audioTxt').innerText = alarmEnabled ? "Alarm: ON" : "Alarm: MUTED";
+            document.getElementById('audioIcon').innerText = alarmEnabled ? "🔔" : "🔕";
+        }
+
+        function playSiren() {
+            if (!alarmEnabled || !sosGlobalEnabled) return;
+            try {
+                if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(800, audioContext.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.4);
+                gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.4);
+                osc.connect(gain); gain.connect(audioContext.destination);
+                osc.start(); osc.stop(audioContext.currentTime + 0.4);
+            } catch(e) {}
+        }
+
+        let fullTelemetryDataRows = [], globalLiveLogs = [];
+
+        function exportDataToCSV() {
+            if (fullTelemetryDataRows.length === 0) { alert("No telemetry records captured yet to export."); return; }
+            let csvContent = "data:text/csv;charset=utf-8,Timestamp,HeartRate_BPM,SpO2_Percent,Stress_Index,BodyTemp_C,Diagnosis,Severity\n";
+            fullTelemetryDataRows.forEach(row => { csvContent += `${row.time},${row.hr},${row.spo2},${row.stress},${row.temp},"${row.diag}",${row.sev}\n`; });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `Health_Telemetry_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        }
+
+        const allConditionDefinitions = [
+            { id: "NORMAL HEALTH", name: "Optimal Physiology", desc: "All biometrics in normal homeostatic range", thresholds: "HR: 60-100 bpm | SpO2 > 95% | Stress < 60%" },
+            { id: "ACUTE PANIC ATTACK", name: "Acute Panic / Anxiety Attack", desc: "Extreme sympathetic arousal and tachycardia", thresholds: "GSR Stress > 80% & HR > 105 bpm" },
+            { id: "CHRONIC STRESS", name: "Chronic Autonomic Stress", desc: "Sustained high electrodermal skin resistance", thresholds: "GSR Stress > 70% sustained" },
+            { id: "BRADYCARDIA", name: "Bradycardia", desc: "Abnormally slow resting heart rate", thresholds: "HR < 50 bpm sustained" },
+            { id: "TACHYCARDIA", name: "Tachycardia", desc: "Abnormally elevated heart rate", thresholds: "HR > 110 bpm at physical rest" },
+            { id: "RESP DISTRESS", name: "Respiratory Distress", desc: "Drop in blood oxygen saturation", thresholds: "SpO2 < 90%" },
+            { id: "SEVERE HYPOXIA", name: "Severe Hypoxia Alert", desc: "Critical oxygen deprivation requiring emergency", thresholds: "SpO2 < 85% emergency" },
+            { id: "SLOUCH / KYPHO", name: "Kyphosis / Chronic Slouching", desc: "Sustained abnormal spinal inclination", thresholds: "Z-Axis < 4.5 & Y-Axis > 4.5" },
+            { id: "FALL / SYNCOPE", name: "Fall / Syncope Event", desc: "High impact shock followed by stasis", thresholds: "Impact > 13 m/s² + horizontal drop" },
+            { id: "TREMOR / SHAKE", name: "Tremor / Parkinsonism", desc: "Rhythmic kinematic limb oscillations", thresholds: "Oscillation 3-7 Hz sustained" },
+            { id: "CARDIO STRESS", name: "Cardiovascular Stress", desc: "High heart rate during sedentary state", thresholds: "HR > 125 bpm & Motion < 0.5" },
+            { id: "POSTURE IMBAL", name: "Postural Imbalance", desc: "Coronal lateral trunk tilt", thresholds: "Y-Axis > 6.0 m/s²" },
+            { id: "OVEREXERTION", name: "Physical Overexertion", desc: "Excessive physical motion acceleration", thresholds: "Motion Delta > 9.0 m/s²" },
+            { id: "SLEEP APNEA", name: "Sleep Apnea Suspicion", desc: "Simultaneous Bradycardia & Hypoxia", thresholds: "HR < 48 bpm & SpO2 < 92%" },
+            { id: "ARRHYTHMIA", name: "Pulse Arrhythmia", desc: "Irregular pulse cycle variation delta", thresholds: "Cycle variation > 25 bpm" }
+            ,{ id: "SUPRAVENTRICULAR ECTOPIC BEAT", name: "Supraventricular Ectopic Beat", desc: "AI-classified premature beat originating above the ventricles", thresholds: "Model confidence >= 60%" }
+            ,{ id: "VENTRICULAR ECTOPIC BEAT", name: "Ventricular Ectopic Beat", desc: "AI-classified premature ventricular beat pattern", thresholds: "Model confidence >= 60%" }
+            ,{ id: "FUSION BEAT", name: "Fusion Beat", desc: "AI-classified fusion of normal and ventricular activation", thresholds: "Model confidence >= 60%" }
+            ,{ id: "PHYSIOLOGICAL STRESS", name: "WESAD Stress Pattern", desc: "Wearable physiological pattern associated with stress", thresholds: "Model confidence >= 70%" }
+        ];
+
+        const retainedAiIds = new Set(["SUPRAVENTRICULAR ECTOPIC BEAT", "VENTRICULAR ECTOPIC BEAT", "FUSION BEAT"]);
+        const conditionList = [
+            { id: "NORMAL HEALTH", name: "No Active Alert", desc: "Available sensor readings and ready AI models have no active alert", thresholds: "Valid sensor data required" },
+            { id: "BRADYCARDIA", name: "Bradycardia Rule", desc: "Low heart-rate threshold from MAX30102", thresholds: "Heart rate < 50 bpm" },
+            { id: "TACHYCARDIA", name: "Tachycardia Rule", desc: "Elevated heart-rate threshold from MAX30102", thresholds: "Heart rate > 110 bpm" },
+            { id: "SEVERE TACHYCARDIA", name: "Severe Tachycardia Rule", desc: "Severely elevated heart rate", thresholds: "Heart rate > 140 bpm" },
+            { id: "LOW OXYGEN SATURATION", name: "Low Oxygen Rule", desc: "Reduced MAX30102 oxygen saturation", thresholds: "SpO2 < 92%" },
+            { id: "SEVERE HYPOXEMIA", name: "Severe Hypoxemia Rule", desc: "Severely reduced oxygen saturation", thresholds: "SpO2 < 85%" },
+            { id: "FEVER", name: "Fever Rule", desc: "Elevated MLX90614 object temperature", thresholds: "Temperature >= 38.0 C" },
+            { id: "HIGH FEVER", name: "High Fever Rule", desc: "Highly elevated MLX90614 object temperature", thresholds: "Temperature >= 39.5 C" },
+            { id: "LOW BODY TEMPERATURE", name: "Low Temperature Rule", desc: "Low MLX90614 object temperature", thresholds: "Temperature < 35.0 C" },
+            ...allConditionDefinitions.filter(item => retainedAiIds.has(item.id)),
+            { id: "UNCLASSIFIABLE ECG BEAT", name: "Unclassifiable ECG Beat", desc: "AD8232 ECG AI could not assign a standard class", thresholds: "Model confidence >= 60%" },
+            { id: "PHYSIOLOGICAL STRESS PATTERN", name: "Experimental Stress Pattern", desc: "WESAD AI using only heart rate and temperature", thresholds: "Model confidence >= 75%" }
+        ];
+        const aiConditionIds = new Set(["SUPRAVENTRICULAR ECTOPIC BEAT", "VENTRICULAR ECTOPIC BEAT", "FUSION BEAT", "UNCLASSIFIABLE ECG BEAT", "PHYSIOLOGICAL STRESS PATTERN"]);
+        const ruleConditionIds = new Set(["BRADYCARDIA", "TACHYCARDIA", "SEVERE TACHYCARDIA", "LOW OXYGEN SATURATION", "SEVERE HYPOXEMIA", "FEVER", "HIGH FEVER", "LOW BODY TEMPERATURE"]);
+
+        let selectedConditionId = null;
+
+        function modelDisplay(item, modelResults = {}) {
+            const arrhythmiaIds = ["SUPRAVENTRICULAR ECTOPIC BEAT", "VENTRICULAR ECTOPIC BEAT", "FUSION BEAT", "UNCLASSIFIABLE ECG BEAT"];
+            let result = null;
+            let probability = null;
+            const ruleIds = ["BRADYCARDIA", "TACHYCARDIA", "SEVERE TACHYCARDIA", "LOW OXYGEN SATURATION", "SEVERE HYPOXEMIA", "FEVER", "HIGH FEVER", "LOW BODY TEMPERATURE"];
+            if (arrhythmiaIds.includes(item.id)) {
+                result = modelResults.arrhythmia;
+                if (result) probability = result.diagnosis === item.id ? Number(result.confidence || 0) * 100 : 0;
+            } else if (item.id === "PHYSIOLOGICAL STRESS PATTERN") {
+                result = modelResults.wesad_stress;
+                if (result) probability = Number(result.confidence || 0) * 100;
+            } else if (ruleIds.includes(item.id)) {
+                result = modelResults.rules;
+                if (result) probability = (result.alerts || []).some(alert => alert.diagnosis === item.id) ? 100 : 0;
+            }
+            return {
+                probability: probability === null ? null : Math.max(0, Math.min(100, probability)),
+                status: result
+                    ? String(result.status || "unknown").replaceAll("_", " ").toUpperCase()
+                    : (arrhythmiaIds.includes(item.id) || item.id === "PHYSIOLOGICAL STRESS PATTERN")
+                        ? "AI MODEL — WAITING FOR DATA"
+                        : item.id === "NORMAL HEALTH" ? "NO DATA" : "RULE BASED"
+            };
+        }
+
+        function renderFullReportMatrix(activeId, modelResults = {}) {
+            const tbody = document.getElementById('rptMatrixTableBody');
+            tbody.innerHTML = '';
+            conditionList.forEach(item => {
+                const isMatch = (item.id === activeId);
+                const isAlert = isMatch && item.id !== "NORMAL HEALTH";
+                const model = modelDisplay(item, modelResults);
+                const probValue = model.probability === null ? (isMatch ? 100 : 0) : model.probability;
+                const prob = `${probValue.toFixed(1)}%`;
+                const badge = isAlert ? '<span class="rpt-badge-danger">ALERT</span>' : '<span class="rpt-badge-safe">NOMINAL</span>';
+                const status = isAlert ? '<strong style="color:#b91c1c;">TRIGGERED</strong>' : `<span style="color:#64748b;">${model.status}</span>`;
+                tbody.innerHTML += `<tr><td><strong>${item.name}</strong></td><td style="color:#475569; font-size:10px;">${item.desc} (${item.thresholds})</td><td><strong>${prob}</strong></td><td>${badge}</td><td>${status}</td></tr>`;
+            });
+        }
+        renderFullReportMatrix("NO SENSOR DATA");
+
+        function renderMatrixCards(activeId, modelResults = {}) {
+            const renderGroup = (containerId, allowedIds) => {
+                const container = document.getElementById(containerId);
+                container.innerHTML = '';
+                conditionList.filter(item => allowedIds.has(item.id)).forEach(item => {
+                const isActive = (item.id === activeId);
+                const model = modelDisplay(item, modelResults);
+                const prob = model.probability === null ? (isActive ? 100 : 0) : Number(model.probability.toFixed(1));
+                container.innerHTML += `<div class="matrix-card ${isActive ? 'active' : ''}" onclick="openInspectModal('${item.id}')"><div class="matrix-title"><span>${item.name}</span><span style="color:${isActive ? 'var(--accent-cyan)' : 'var(--text-sub)'}">${prob}%</span></div><div class="matrix-desc">${item.desc} | ${model.status}</div><div class="prob-bar-bg"><div class="prob-bar-fill" style="width:${prob}%; background:${isActive ? 'var(--accent-cyan)' : '#334155'};"></div></div><span class="click-hint">🔍 Click to inspect live graph & history</span></div>`;
+                });
+            };
+            renderGroup('aiMatrixContainer', aiConditionIds);
+            renderGroup('ruleMatrixContainer', ruleConditionIds);
+        }
+        renderMatrixCards("NO SENSOR DATA");
+
+        function openInspectModal(condId) {
+            selectedConditionId = condId;
+            const item = conditionList.find(c => c.id === condId);
+            if (!item) return;
+            document.getElementById('modalTitle').innerText = item.name + " Analysis";
+            document.getElementById('modalDesc').innerText = item.desc + " | Thresholds: " + item.thresholds;
+            const tableBody = document.getElementById('modalHistoryBody');
+            tableBody.innerHTML = '';
+            const filteredLogs = globalLiveLogs.filter(log => log.condition === condId);
+            if (filteredLogs.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-sub);">No live abnormal events recorded for this parameter yet.</td></tr>`;
+            } else {
+                filteredLogs.forEach(log => {
+                    tableBody.innerHTML += `<tr><td><span style="color:var(--text-sub);">${log.time}</span></td><td><strong style="color:var(--accent-cyan);">${log.condition}</strong></td><td>${log.vitals}</td><td><span style="color:${log.severity === 'CRITICAL' ? 'var(--danger)' : 'var(--warn)'}; font-weight:bold;">${log.severity}</span></td><td>${log.action}</td></tr>`;
+                });
+            }
+            document.getElementById('inspectModal').style.display = 'flex';
+        }
+
+        function closeModal() { document.getElementById('inspectModal').style.display = 'none'; selectedConditionId = null; }
+
+        function setGaugeValue(arcId, value, min, max) {
+            const arc = document.getElementById(arcId);
+            if (!arc) return;
+            const clamped = Math.min(Math.max(value, min), max);
+            const ratio = (clamped - min) / (max - min);
+            const maxDash = 198;
+            const offset = maxDash - (ratio * maxDash);
+            arc.style.strokeDasharray = `${maxDash}`;
+            arc.style.strokeDashoffset = `${offset}`;
+        }
+
+        const cvPulse = document.getElementById('canvasPulse');
+        const cvGSR = document.getElementById('canvasGSR');
+        const cvKin = document.getElementById('canvasKinematics');
+
+        let pulseHist = Array(35).fill(0);
+        let gsrHist = Array(35).fill(0);
+        let axHist = Array(35).fill(0), ayHist = Array(35).fill(0), azHist = Array(35).fill(0);
+
+        function resizeAllCanvases() {
+            [cvPulse, cvGSR, cvKin].forEach(cv => {
+                if (cv && cv.parentElement && cv.parentElement.clientWidth > 0) {
+                    cv.width = cv.parentElement.clientWidth;
+                    cv.height = cv.parentElement.clientHeight;
+                }
+            });
+            drawAll();
+        }
+        window.addEventListener('resize', resizeAllCanvases);
+        setTimeout(resizeAllCanvases, 100);
+
+        function drawAll() {
+            drawLine(cvPulse, pulseHist, '#06b6d4', 0, 160);
+            drawLine(cvGSR, gsrHist, '#fbbf24', 0, 100);
+            drawKinematics(cvKin);
+        }
+
+        function drawLine(cv, data, col, min, max) {
+            if (!cv || cv.width === 0) return;
+            const ctx = cv.getContext('2d');
+            ctx.clearRect(0, 0, cv.width, cv.height);
+            ctx.strokeStyle = '#1d2d44';
+            for (let y = 0; y < cv.height; y += 35) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cv.width, y); ctx.stroke(); }
+            ctx.strokeStyle = col; ctx.lineWidth = 2.5; ctx.beginPath();
+            const step = cv.width / (data.length - 1);
+            data.forEach((v, i) => {
+                const normY = cv.height - ((v - min) / (max - min)) * cv.height;
+                if (i === 0) ctx.moveTo(0, normY); else ctx.lineTo(i * step, normY);
+            });
+            ctx.stroke();
+        }
+
+        function drawKinematics(cv) {
+            if (!cv || cv.width === 0) return;
+            const ctx = cv.getContext('2d');
+            ctx.clearRect(0, 0, cv.width, cv.height);
+            ctx.strokeStyle = '#1d2d44';
+            for (let y = 0; y < cv.height; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cv.width, y); ctx.stroke(); }
+            const step = cv.width / (axHist.length - 1);
+            const rLine = (d, col) => {
+                ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath();
+                d.forEach((v, i) => {
+                    const normY = cv.height - ((v + 15) / 30) * cv.height;
+                    if (i === 0) ctx.moveTo(0, normY); else ctx.lineTo(i * step, normY);
+                });
+                ctx.stroke();
+            };
+            rLine(axHist, '#06b6d4'); rLine(ayHist, '#fbbf24'); rLine(azHist, '#ef4444');
+        }
+
+        const clientId = "SmartHealthClient-" + Math.random().toString(16).substr(2, 8);
+        const client = new Paho.MQTT.Client("127.0.0.1", 9001, clientId);
+
+        client.onConnectionLost = function() {
+            document.getElementById('statusDot').style.background = "var(--danger)";
+            document.getElementById('statusTxt').innerText = "Disconnected";
+            resetDashboard();
+            setTimeout(initMQTT, 3000);
+        };
+
+        // 🎯 FIXED MQTT MESSAGE ARRIVED (Properly filtered for Gyro vs Health Node)
+        client.onMessageArrived = function(msg) {
+            try {
+                const d = JSON.parse(msg.payloadString);
+                logStream(msg.payloadString);
+
+                // Raw health packets are consumed by Python first. Render only the
+                // enriched backend packet so the UI never shows an unverified result.
+                if (msg.destinationName === "smartwear/device/telemetry" &&
+                    d.device_id !== "GYRO_NODE_01" && d.gx === undefined) {
+                    return;
+                }
+
+                // Save to Firebase Realtime Database
+                db.ref('telemetry/history').push({ ...d, client_timestamp: new Date().toLocaleString() });
+
+                // Check if packet belongs to Gyro / MPU6050 Node
+                if (d.device_id === "GYRO_NODE_01" || (d.gx !== undefined && d.heart_rate === undefined)) {
+                    lastGyroPacketTime = Date.now();
+                    document.getElementById('gyroNodeState').innerText = "CONNECTED [OK]";
+                    document.getElementById('gyroNodeState').style.color = "var(--success)";
+                    document.getElementById('txtGyroStatus').innerText = "ONLINE";
+                    document.getElementById('txtGyroStatus').style.color = "var(--success)";
+                    document.getElementById('gyroStatusPill').style.borderColor = "var(--success)";
+
+                    const azVal = d.az !== undefined ? d.az : 9.81;
+                    const axVal = d.ax !== undefined ? d.ax : 0;
+                    const ayVal = d.ay !== undefined ? d.ay : 0;
+
+                    document.getElementById('gyroAzVal').innerText = azVal.toFixed(2) + " m/s²";
+                    document.getElementById('gyroSevVal').innerText = (d.severity || 0) + " (" + (d.severity === 2 ? "CRITICAL" : "SAFE") + ")";
+                    
+                    const fallStateEl = document.getElementById('gyroFallState');
+                    fallStateEl.innerText = d.diagnosis || "MONITORING";
+                    fallStateEl.style.color = d.severity === 2 ? "var(--danger)" : "var(--success)";
+
+                    if (d.severity === 2 && sosGlobalEnabled) {
+                        playSiren();
+                        document.getElementById('sosAlertBanner').style.display = "block";
+                        document.getElementById('mainDashboardWrapper').classList.add('blink-red');
+                    }
+
+                    if (gyroChartInstance) {
+                        gyroChartInstance.data.labels.shift();
+                        gyroChartInstance.data.labels.push(new Date().toLocaleTimeString().slice(-8));
+                        gyroChartInstance.data.datasets[0].data.shift(); gyroChartInstance.data.datasets[0].data.push(azVal);
+                        gyroChartInstance.data.datasets[1].data.shift(); gyroChartInstance.data.datasets[1].data.push(axVal);
+                        gyroChartInstance.data.datasets[2].data.shift(); gyroChartInstance.data.datasets[2].data.push(ayVal);
+                        gyroChartInstance.update('none');
+                    }
+                } else {
+                    // Health Vitals Node
+                    updateUI(d);
+                }
+            } catch(e) {
+                console.error("MQTT Parse Error:", e);
+            }
+        };
+
+        function initMQTT() {
+            client.connect({
+                onSuccess: function() {
+                    document.getElementById('statusDot').style.background = "var(--success)";
+                    document.getElementById('statusTxt').innerText = "Live HiveMQ";
+                    client.subscribe("smartwear/device/telemetry");
+                    client.subscribe("smartwear/device/predictions");
+                },
+                useSSL: false
+            });
+        }
+        let lastHealthPacketTime = 0;
+        initMQTT();
+
+        function resetDashboard() {
+            const setText = (id, value) => { const element = document.getElementById(id); if (element) element.innerText = value; };
+            setText('valHR', '0'); setText('valSpO2', '0'); setText('valStress', '0'); setText('valTemp', '0.0');
+            setText('valRiskScore', '0'); setText('valGPS', '0');
+            setText('subHR', 'Waiting for MAX30102'); setText('subSpO2', 'Waiting for MAX30102');
+            setText('subStress', 'Waiting for HR + temperature'); setText('subTemp', 'Waiting for MLX90614');
+            setText('subRisk', 'No data'); setText('subGPS', 'Waiting for NEO-7M');
+            setText('rptStatusHR', 'NO DATA'); setText('rptStatusSpO2', 'NO DATA');
+            setText('rptStatusStress', 'NO DATA'); setText('rptStatusTemp', 'NO DATA');
+            setText('rptBeltState', 'WAITING FOR DATA');
+            setText('rptValHR', '0 bpm'); setText('rptValSpO2', '0 %'); setText('rptValGSR', '0 % AI probability'); setText('rptValTemp', '0.0 °C');
+            setText('valNervous', '0'); setText('valPosture', '0'); setText('valSOS', '0');
+            setText('valAx', '0.00'); setText('valAy', '0.00'); setText('valAz', '0.00');
+            setText('gyroAzVal', '0.00'); setText('gyroSevVal', '0'); setText('gyroFallState', '0');
+            setText('heroDiagTitle', 'NO SENSOR DATA');
+            setText('heroDiagDesc', 'Waiting for MAX30102, MLX90614, AD8232, and NEO-7M telemetry.');
+            setText('heroSeverityBadge', 'NO DATA');
+            ['arcHR', 'arcSpO2', 'arcStress', 'arcTemp', 'arcRisk', 'arcGPS'].forEach(id => setGaugeValue(id, 0, 0, 100));
+            pulseHist = Array(35).fill(0); gsrHist = Array(35).fill(0);
+            axHist = Array(35).fill(0); ayHist = Array(35).fill(0); azHist = Array(35).fill(0);
+            renderMatrixCards('NO SENSOR DATA', {}); renderFullReportMatrix('NO SENSOR DATA', {});
+            document.getElementById('mainDashboardWrapper').classList.remove('blink-red');
+            drawAll();
+        }
+
+        setInterval(() => {
+            if (lastHealthPacketTime === 0 || Date.now() - lastHealthPacketTime > 5000) resetDashboard();
+        }, 1000);
+
+        function updateUI(d) {
+            lastHealthPacketTime = Date.now();
+            const hr = Number(d.heart_rate) || 0;
+            const spo2 = Number(d.spo2) || 0;
+            const stressResult = (d.models || {}).wesad_stress || {};
+            const stress = Math.round(Number(stressResult.confidence || 0) * 100);
+            const temp = (Number(d.temperature) || 0).toFixed(1);
+            const risk = Number(d.risk_score) || 0;
+
+            fullTelemetryDataRows.push({ time: new Date().toLocaleTimeString(), hr: hr, spo2: spo2, stress: stress, temp: temp, diag: d.diagnosis, sev: d.severity });
+
+            if ((d.severity === 2 || d.sos_alert === true) && sosGlobalEnabled) { 
+                playSiren(); 
+                document.getElementById('mainDashboardWrapper').classList.add('blink-red');
+            } else {
+                document.getElementById('mainDashboardWrapper').classList.remove('blink-red');
+            }
+
+            document.getElementById('valHR').innerText = hr;
+            document.getElementById('valSpO2').innerText = spo2;
+            document.getElementById('valStress').innerText = stress;
+            document.getElementById('rptValGSR').innerText = `${stress} % AI probability`;
+            document.getElementById('rptValHR').innerText = `${hr} bpm`;
+            document.getElementById('rptValSpO2').innerText = `${spo2} %`;
+            document.getElementById('rptValTemp').innerText = `${temp} °C`;
+            document.getElementById('rptStatusHR').innerText = hr === 0 ? 'NO DATA' : (hr < 50 || hr > 110 ? 'ALERT' : 'IN RANGE');
+            document.getElementById('rptStatusSpO2').innerText = spo2 === 0 ? 'NO DATA' : (spo2 < 92 ? 'ALERT' : 'IN RANGE');
+            document.getElementById('rptStatusStress').innerText = stressResult.status === 'ready' ? (stressResult.diagnosis === 'PHYSIOLOGICAL STRESS PATTERN' ? 'AI ALERT' : 'NO AI ALERT') : 'WARMING UP';
+            document.getElementById('rptStatusTemp').innerText = Number(temp) === 0 ? 'NO DATA' : (Number(temp) < 35 || Number(temp) >= 38 ? 'ALERT' : 'IN RANGE');
+            document.getElementById('rptBeltState').innerText = 'TELEMETRY RECEIVED';
+            document.getElementById('valTemp').innerText = temp;
+            document.getElementById('valRiskScore').innerText = risk < 10 ? `0${risk}` : risk;
+            document.getElementById('valGPS').innerText = d.gps_valid ? '1' : '0';
+            document.getElementById('subGPS').innerText = d.gps_valid ? `${Number(d.latitude).toFixed(5)}, ${Number(d.longitude).toFixed(5)}` : 'No satellite fix';
+            document.getElementById('subHR').innerText = hr > 0 ? 'MAX30102 live' : 'No valid pulse';
+            document.getElementById('subSpO2').innerText = spo2 > 0 ? 'MAX30102 live' : 'No valid SpO2';
+            document.getElementById('subTemp').innerText = Number(temp) > 0 ? 'MLX90614 live' : 'No valid temperature';
+            document.getElementById('subStress').innerText = String(stressResult.status || 'warming up').replaceAll('_', ' ');
+            document.getElementById('subRisk').innerText = d.diagnosis || 'Monitoring';
+
+            setGaugeValue('arcHR', hr, 40, 160);
+            setGaugeValue('arcSpO2', spo2, 80, 100);
+            setGaugeValue('arcStress', stress, 0, 100);
+            setGaugeValue('arcTemp', parseFloat(temp), 34, 40);
+            setGaugeValue('arcRisk', risk, 0, 100);
+            setGaugeValue('arcGPS', d.gps_valid ? 100 : 0, 0, 100);
+
+            document.getElementById('heroDiagTitle').innerText = d.diagnosis || "NORMAL HEALTH";
+            document.getElementById('heroDiagDesc').innerText = 'Results use AD8232 ECG AI, experimental HR/temperature stress AI, and transparent MAX30102/MLX90614 threshold rules.';
+            document.getElementById('heroSeverityBadge').innerText = d.severity >= 2 ? 'HIGH ALERT' : (d.severity === 1 ? 'WARNING' : 'MONITORING');
+            renderMatrixCards(d.diagnosis || "NORMAL HEALTH", d.models || {});
+            renderFullReportMatrix(d.diagnosis || "NORMAL HEALTH", d.models || {});
+
+            if (d.diagnosis && d.diagnosis !== "NORMAL HEALTH" && d.diagnosis !== "OPTIMAL PHYSIOLOGY") {
+                globalLiveLogs.unshift({ time: new Date().toLocaleTimeString(), condition: d.diagnosis, vitals: `HR: ${hr} bpm, SpO2: ${spo2}%, Stress: ${stress}%`, severity: (d.severity === 2) ? 'CRITICAL' : 'WARN', action: (d.severity === 2) ? 'Emergency Alert Dispatched' : 'Logged for Observation' });
+                if (globalLiveLogs.length > 30) globalLiveLogs.pop();
+            }
+
+            if (selectedConditionId && modalChartInstance) {
+                const selectedItem = conditionList.find(item => item.id === selectedConditionId);
+                const selectedModel = selectedItem ? modelDisplay(selectedItem, d.models || {}) : { probability: null };
+                const liveProb = selectedModel.probability === null ? ((d.diagnosis === selectedConditionId) ? 100 : 0) : selectedModel.probability;
+                modalProbHistory.shift(); modalProbHistory.push(liveProb);
+                modalChartInstance.data.datasets[0].data = modalProbHistory;
+                modalChartInstance.update('none');
+            }
+
+            pulseHist.shift(); pulseHist.push(hr);
+            gsrHist.shift(); gsrHist.push(stress);
+            drawAll();
+        }
+
+        setTimeout(() => {
+            setGaugeValue('arcHR', 0, 0, 160);
+            setGaugeValue('arcSpO2', 0, 0, 100);
+            setGaugeValue('arcStress', 0, 0, 100);
+            setGaugeValue('arcTemp', 0, 0, 45);
+            setGaugeValue('arcRisk', 0, 0, 100);
+            setGaugeValue('arcGPS', 0, 0, 100);
+            resetDashboard();
+        }, 150);
+
+        function downloadPDFReport() {
+            const element = document.getElementById('printableReportPaper');
+            const patientName = document.getElementById('inpName').value.replace(/\s+/g, '_');
+            const opt = {
+                margin: 0.15, filename: `Clinical_Report_${patientName}_${new Date().toISOString().slice(0,10)}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, logging: false },
+                jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+            };
+            html2pdf().set(opt).from(element).save();
+        }
+
+        function logStream(raw) {
+            const box = document.getElementById('terminalLog');
+            if(box) { box.innerHTML += `<div class="log-row"><span style="color:#94a3b8;">[${new Date().toLocaleTimeString()}]</span> ${raw}</div>`; box.scrollTop = box.scrollHeight; }
+        }
+
+        function clearTerminal() { document.getElementById('terminalLog').innerHTML = ''; }
+    </script>
+</body>
+</html>
