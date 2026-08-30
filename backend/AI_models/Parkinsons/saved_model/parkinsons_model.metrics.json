@@ -1,0 +1,60 @@
+{
+  "accuracy": 0.7202304737516005,
+  "balanced_accuracy": 0.5867510330578513,
+  "classification_report": {
+    "healthy": {
+      "precision": 0.37003058103975534,
+      "recall": 0.34375,
+      "f1-score": 0.35640648011782033,
+      "support": 352.0
+    },
+    "parkinsons": {
+      "precision": 0.8129554655870446,
+      "recall": 0.8297520661157025,
+      "f1-score": 0.8212678936605317,
+      "support": 1210.0
+    },
+    "accuracy": 0.7202304737516005,
+    "macro avg": {
+      "precision": 0.5914930233133999,
+      "recall": 0.5867510330578513,
+      "f1-score": 0.588837186889176,
+      "support": 1562.0
+    },
+    "weighted avg": {
+      "precision": 0.7131414070975147,
+      "recall": 0.7202304737516005,
+      "f1-score": 0.7165103920171038,
+      "support": 1562.0
+    }
+  },
+  "confusion_matrix": [
+    [
+      121,
+      231
+    ],
+    [
+      206,
+      1004
+    ]
+  ],
+  "train_recordings": 6248,
+  "test_recordings": 1562,
+  "train_subjects": 284,
+  "test_subjects": 71,
+  "sampling_rate": 50.0,
+  "excluded_other_movement_disorder_subjects": 114,
+  "task_counts": {
+    "Relaxed": 710,
+    "RelaxedTask": 710,
+    "StretchHold": 710,
+    "LiftHold": 710,
+    "HoldWeight": 710,
+    "PointFinger": 710,
+    "DrinkGlas": 710,
+    "CrossArms": 710,
+    "TouchIndex": 710,
+    "TouchNose": 710,
+    "Entrainment": 710
+  }
+}
